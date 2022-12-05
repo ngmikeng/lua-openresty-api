@@ -8,9 +8,10 @@ local ffi_gc = ffi.gc
 local ffi_typeof = ffi.typeof
 local C = ffi.C
 local setmetatable = setmetatable
+local error = error
 
 
-local _M = { _VERSION = '0.06' }
+local _M = { _VERSION = '0.04' }
 
 local mt = { __index = _M }
 
@@ -18,6 +19,8 @@ local mt = { __index = _M }
 ffi.cdef[[
 typedef struct engine_st ENGINE;
 typedef struct evp_pkey_ctx_st EVP_PKEY_CTX;
+typedef struct evp_md_ctx_st EVP_MD_CTX;
+typedef struct evp_md_st EVP_MD;
 typedef struct hmac_ctx_st HMAC_CTX;
 
 //OpenSSL 1.0
@@ -27,10 +30,25 @@ void HMAC_CTX_cleanup(HMAC_CTX *ctx);
 //OpenSSL 1.1
 HMAC_CTX *HMAC_CTX_new(void);
 void HMAC_CTX_free(HMAC_CTX *ctx);
+
+int HMAC_Init_ex(HMAC_CTX *ctx, const void *key, int len, const EVP_MD *md, ENGINE *impl);
+int HMAC_Update(HMAC_CTX *ctx, const unsigned char *data, size_t len);
+int HMAC_Final(HMAC_CTX *ctx, unsigned char *md, unsigned int *len);
+
+const EVP_MD *EVP_md5(void);
+const EVP_MD *EVP_sha1(void);
+const EVP_MD *EVP_sha256(void);
+const EVP_MD *EVP_sha512(void);
 ]]
 
 local buf = ffi_new("unsigned char[64]")
 local res_len = ffi_new("unsigned int[1]")
+local hashes = {
+    MD5 = C.EVP_md5(),
+    SHA1 = C.EVP_sha1(),
+    SHA256 = C.EVP_sha256(),
+    SHA512 = C.EVP_sha512()
+}
 
 local ctx_new, ctx_free
 local openssl11, e = pcall(function ()
@@ -38,10 +56,6 @@ local openssl11, e = pcall(function ()
     C.HMAC_CTX_free(ctx)
 end)
 if openssl11 then
-    ffi.cdef [[
-    typedef struct evp_md_ctx_st EVP_MD_CTX;
-    typedef struct evp_md_st EVP_MD;
-    ]]
     ctx_new = function ()
         return C.HMAC_CTX_new()
     end
@@ -50,9 +64,7 @@ if openssl11 then
     end
 else
     ffi.cdef [[
-    typedef struct env_md_ctx_st EVP_MD_CTX;
-    typedef struct env_md_st EVP_MD;
-    struct env_md_ctx_st
+    struct evp_md_ctx_st
     {
         const EVP_MD *digest;
         ENGINE *engine;
@@ -62,7 +74,7 @@ else
         int (*update)(EVP_MD_CTX *ctx,const void *data,size_t count);
     };
 
-    struct env_md_st
+    struct evp_md_st
     {
         int type;
         int pkey_type;
@@ -100,30 +112,11 @@ else
         C.HMAC_CTX_init(ctx)
         return ctx
     end
-    ctx_free = function (ctx)
+    ctx_free = function (ctx) 
         C.HMAC_CTX_cleanup(ctx)
     end
 end
 
-ffi.cdef [[
-int HMAC_Init_ex(HMAC_CTX *ctx, const void *key, int len, const EVP_MD *md, ENGINE *impl);
-int HMAC_Update(HMAC_CTX *ctx, const unsigned char *data, size_t len);
-int HMAC_Final(HMAC_CTX *ctx, unsigned char *md, unsigned int *len);
-
-const EVP_MD *EVP_md5(void);
-const EVP_MD *EVP_sha1(void);
-const EVP_MD *EVP_sha256(void);
-const EVP_MD *EVP_sha384(void);
-const EVP_MD *EVP_sha512(void);
-]]
-
-local hashes = {
-    MD5 = C.EVP_md5(),
-    SHA1 = C.EVP_sha1(),
-    SHA256 = C.EVP_sha256(),
-    SHA384 = C.EVP_sha384(),
-    SHA512 = C.EVP_sha512()
-}
 
 _M.ALGOS = hashes
 
@@ -170,6 +163,5 @@ end
 function _M.reset(self)
     return C.HMAC_Init_ex(self._ctx, nil, 0, nil, nil) == 1
 end
-
 
 return _M

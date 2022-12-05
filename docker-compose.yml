@@ -1,0 +1,31 @@
+version: '1.0'
+
+services:
+  lua-openresty-api:
+    build:
+      context: .
+    image: lua-openresty-api
+    restart: always
+    ports:
+      - 80:80
+    environment:
+      - ENV=dev
+      - DEBUG_SOURCES_DIR=E:/lua-projects/lua-openresty-api/lua
+    volumes:
+      - ./conf:/usr/local/openresty/nginx/conf:ro
+      - ./conf/conf.d:/etc/nginx/conf.d
+      - ./logs:/usr/local/openresty/nginx/logs
+      - ./conf/mime.types:/etc/nginx/mime.types
+      - ./lua:/usr/local/openresty/lua-openresty-api
+      - ./temp:/opt/file
+
+  mysql:
+    image: mysql
+    ports:
+      - "3306:3306"
+    # NOTE: use of "mysql_native_password" is not recommended: https://dev.mysql.com/doc/refman/8.0/en/upgrading-from-previous-series.html#upgrade-caching-sha2-password
+    # (this is just an example, not intended to be a production configuration)
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: mysql@123
